@@ -54,7 +54,7 @@ export function PlantPicker() {
               <div className="text-xs font-medium text-gray-800 truncate">{p.name}</div>
               <div className="flex items-center gap-1 text-xs text-gray-400">
                 {SUN_ICONS[p.sunRequirement]}
-                <span>{p.spacingDensity}/sqft</span>
+                <span>{(p.footprintFt ?? 1) > 1 ? `1 per ${p.footprintFt}×${p.footprintFt}ft` : `${p.spacingDensity}/sqft`}</span>
                 <span>·</span>
                 <span>{p.daysToHarvest}d</span>
               </div>

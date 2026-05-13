@@ -4,10 +4,12 @@ import { v4 as uuidv4 } from 'uuid'
 import { db } from '../../db/db'
 import { useAppStore } from '../../store'
 import { useBeds } from '../../hooks/useBeds'
-import { snapToFoot, wouldOverlapExisting } from '../../utils/gridMath'
+import { usePlants } from '../../hooks/usePlants'
+import { snapToFoot, wouldOverlapExisting, CELL_PX } from '../../utils/gridMath'
 import { GridLayer } from './GridLayer'
 import { BedShape } from './BedShape'
 import { DraftBedOverlay } from './DraftBedOverlay'
+import { PlantStampOverlay } from './PlantStampOverlay'
 import type Konva from 'konva'
 import type { Bed } from '../../types'
 
@@ -20,12 +22,26 @@ interface Props {
 }
 
 export function GardenStage({ width, height, onBedOverlap }: Props) {
-  const { tool, bedDrawing, setBedDrawing, viewport, setViewport, activeGardenId, setActiveBedId, setSelectedSquareId } = useAppStore()
+  const { tool, activePlantId, bedDrawing, setBedDrawing, viewport, setViewport, activeGardenId, setActiveBedId, setSelectedSquareId } = useAppStore()
   const beds = useBeds()
+  const plants = usePlants()
   const stageRef = useRef<Konva.Stage>(null)
   const isPanning = useRef(false)
+  const isSpaceDown = useRef(false)
   const lastPan = useRef({ x: 0, y: 0 })
   const [draftEnd, setDraftEnd] = useState({ x: 0, y: 0 })
+  const [stampPos, setStampPos] = useState<{ col: number; row: number } | null>(null)
+  const [spaceHeld, setSpaceHeld] = useState(false)
+
+  const activePlant = plants.find(p => p.id === activePlantId)
+  const stampFp = activePlant?.footprintFt ?? 1
+  const stampVisible = tool === 'paint-plant' && stampFp > 1 && stampPos !== null
+  const stampValid = stampVisible && beds.some(b =>
+    stampPos!.col >= b.x &&
+    stampPos!.col + stampFp <= b.x + b.widthFt &&
+    stampPos!.row >= b.y &&
+    stampPos!.row + stampFp <= b.y + b.heightFt
+  )
 
   function handleWheel(e: Konva.KonvaEventObject<WheelEvent>) {
     e.evt.preventDefault()
@@ -49,6 +65,13 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
   }
 
   function handleMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
+    // Space-pan overrides all tools — intercept before the shape-click guard
+    if (isSpaceDown.current) {
+      isPanning.current = true
+      lastPan.current = { x: e.evt.clientX, y: e.evt.clientY }
+      return
+    }
+
     if (e.target !== stageRef.current) return // clicked a shape
 
     if (tool === 'select') {
@@ -69,7 +92,7 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
   }
 
   function handleMouseMove(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (isPanning.current && tool === 'select') {
+    if (isPanning.current && (tool === 'select' || isSpaceDown.current)) {
       const dx = e.evt.clientX - lastPan.current.x
       const dy = e.evt.clientY - lastPan.current.y
       lastPan.current = { x: e.evt.clientX, y: e.evt.clientY }
@@ -82,6 +105,13 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
       const wx = snapToFoot(pos.x - viewport.x, viewport.scale)
       const wy = snapToFoot(pos.y - viewport.y, viewport.scale)
       setDraftEnd({ x: wx, y: wy })
+    }
+
+    if (tool === 'paint-plant' && stampFp > 1) {
+      const pos = stageRef.current!.getPointerPosition()!
+      const col = Math.floor((pos.x - viewport.x) / (CELL_PX * viewport.scale))
+      const row = Math.floor((pos.y - viewport.y) / (CELL_PX * viewport.scale))
+      setStampPos(prev => (prev?.col === col && prev?.row === row ? prev : { col, row }))
     }
   }
 
@@ -118,6 +148,33 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
     }
   }
 
+  useEffect(() => { setStampPos(null) }, [tool, activePlantId])
+
+  // Spacebar pan
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.code === 'Space' && !e.repeat) {
+        e.preventDefault()
+        isSpaceDown.current = true
+        setSpaceHeld(true)
+      }
+    }
+    function onKeyUp(e: KeyboardEvent) {
+      if (e.code === 'Space') {
+        isSpaceDown.current = false
+        isPanning.current = false
+        setSpaceHeld(false)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [])
+
   // Keyboard shortcuts
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -143,11 +200,16 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
       ref={stageRef}
       width={width}
       height={height}
+      x={viewport.x}
+      y={viewport.y}
+      scaleX={viewport.scale}
+      scaleY={viewport.scale}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      style={{ cursor: tool === 'add-bed' ? 'crosshair' : tool === 'paint-plant' ? 'cell' : tool === 'erase-plant' ? 'not-allowed' : 'default' }}
+      onMouseLeave={() => setStampPos(null)}
+      style={{ cursor: spaceHeld ? 'grab' : tool === 'add-bed' ? 'crosshair' : tool === 'paint-plant' ? 'cell' : tool === 'erase-plant' ? 'not-allowed' : 'default' }}
     >
       <GridLayer
         stageWidth={width}
@@ -156,7 +218,7 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
         offsetY={viewport.y}
         scale={viewport.scale}
       />
-      <Layer x={viewport.x} y={viewport.y} scaleX={viewport.scale} scaleY={viewport.scale}>
+      <Layer>
         {beds.map((bed) => (
           <BedShape
             key={bed.id}
@@ -166,6 +228,16 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
           />
         ))}
       </Layer>
+      {stampVisible && activePlant && (
+        <PlantStampOverlay
+          stampCol={stampPos!.col}
+          stampRow={stampPos!.row}
+          footprintFt={stampFp}
+          plant={activePlant}
+          isValid={stampValid}
+          scale={viewport.scale}
+        />
+      )}
       {bedDrawing.active && bedDrawing.startX !== null && (
         <DraftBedOverlay
           startX={bedDrawing.startX}

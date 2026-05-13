@@ -26,6 +26,7 @@ interface AppState {
   activeBedId: string | null
   selectedSquareId: string | null
   selectedPlantingId: string | null
+  selectedPlantingIds: string[]
   bedDrawing: BedDrawing
   viewport: CanvasViewport
   // Calendar
@@ -42,6 +43,7 @@ interface AppState {
   setActiveBedId: (id: string | null) => void
   setSelectedSquareId: (id: string | null) => void
   setSelectedPlantingId: (id: string | null) => void
+  setSelectedPlantingIds: (ids: string[]) => void
   setActiveGardenId: (id: string | null) => void
   setBedDrawing: (drawing: BedDrawing) => void
   setViewport: (vp: Partial<CanvasViewport>) => void
@@ -60,6 +62,7 @@ export const useAppStore = create<AppState>()(
     activeBedId: null,
     selectedSquareId: null,
     selectedPlantingId: null,
+    selectedPlantingIds: [],
     bedDrawing: { active: false, startX: null, startY: null },
     viewport: { x: 0, y: 0, scale: 1, cellPx: 48 },
     calendarYear: new Date().getFullYear(),
@@ -73,6 +76,7 @@ export const useAppStore = create<AppState>()(
     setActiveBedId: (id) => set((s) => { s.activeBedId = id }),
     setSelectedSquareId: (id) => set((s) => { s.selectedSquareId = id }),
     setSelectedPlantingId: (id) => set((s) => { s.selectedPlantingId = id }),
+    setSelectedPlantingIds: (ids) => set((s) => { s.selectedPlantingIds = ids; s.selectedPlantingId = ids[0] ?? null }),
     setActiveGardenId: (id) => set((s) => { s.activeGardenId = id }),
     setBedDrawing: (drawing) => set((s) => { s.bedDrawing = drawing }),
     setViewport: (vp) => set((s) => { Object.assign(s.viewport, vp) }),

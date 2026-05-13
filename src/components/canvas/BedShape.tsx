@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Group, Rect, Text } from 'react-konva'
+import { Group, Rect, Text, Circle } from 'react-konva'
 import { v4 as uuidv4 } from 'uuid'
 import { CELL_PX } from '../../utils/gridMath'
 import { hexToRgba } from '../../utils/colorUtils'
@@ -10,7 +10,7 @@ import { useAllPlantingsForSquares } from '../../hooks/usePlantings'
 import { usePlants } from '../../hooks/usePlants'
 import { SquareCell } from './SquareCell'
 import { SubgridCell } from './SubgridCell'
-import type { Bed } from '../../types'
+import type { Bed, Plant, Planting } from '../../types'
 
 interface Props {
   bed: Bed
@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function BedShape({ bed, scale, onSelect }: Props) {
-  const { tool, activePlantId, selectedSquareId, selectedPlantingId, setSelectedSquareId, setSelectedPlantingId, setActiveBedId } = useAppStore()
+  const { tool, activePlantId, selectedSquareId, selectedPlantingId, selectedPlantingIds, setSelectedSquareId, setSelectedPlantingId, setSelectedPlantingIds, setActiveBedId } = useAppStore()
   const squares = useSquares(bed.id)
   const squareIds = useMemo(() => squares.map((s) => s.id), [squares])
   const plantings = useAllPlantingsForSquares(squareIds)
@@ -36,22 +36,107 @@ export function BedShape({ bed, scale, onSelect }: Props) {
     return m
   }, [squares])
 
-  async function handleCellClick(col: number, row: number, subCol?: number, subRow?: number) {
+  // Large-footprint plant anchors (one planting covers an NxN block)
+  const largePlantAnchors = useMemo(() => {
+    return plantings
+      .filter(pl => pl.subCol === null)
+      .flatMap((pl): Array<{ col: number; row: number; plant: Plant; planting: Planting; squareId: string }> => {
+        const sq = squares.find(s => s.id === pl.squareId)
+        const plant = plantMap.get(pl.plantId)
+        if (!sq || !plant || (plant.footprintFt ?? 1) <= 1) return []
+        return [{ col: sq.col, row: sq.row, plant, planting: pl, squareId: sq.id }]
+      })
+  }, [plantings, squares, plantMap])
+
+  // Cells (bed-relative col,row) that are covered by a large plant but are NOT the anchor
+  const largeSatelliteCells = useMemo(() => {
+    const cells = new Set<string>()
+    for (const { col, row, plant } of largePlantAnchors) {
+      const fp = plant.footprintFt!
+      for (let dc = 0; dc < fp; dc++) {
+        for (let dr = 0; dr < fp; dr++) {
+          if (dc === 0 && dr === 0) continue
+          cells.add(`${col + dc},${row + dr}`)
+        }
+      }
+    }
+    return cells
+  }, [largePlantAnchors])
+
+  async function handleCellClick(col: number, row: number, subCol?: number, subRow?: number, ctrlKey = false) {
     const squareKey = `${bed.id}-${col}-${row}`
     let square = squareMap.get(squareKey) ?? squares.find((s) => s.col === col && s.row === row)
 
     if (tool === 'select') {
       setActiveBedId(bed.id)
       if (square) {
-        setSelectedSquareId(square.id)
         const pKey = subCol != null ? `${square.id}-${subCol}-${subRow}` : square.id
         const pl = plantingMap.get(pKey)
-        setSelectedPlantingId(pl?.id ?? null)
+        if (ctrlKey && pl) {
+          const next = selectedPlantingIds.includes(pl.id)
+            ? selectedPlantingIds.filter(id => id !== pl.id)
+            : [...selectedPlantingIds, pl.id]
+          setSelectedPlantingIds(next)
+        } else {
+          setSelectedSquareId(square.id)
+          setSelectedPlantingIds(pl ? [pl.id] : [])
+          setSelectedPlantingId(pl?.id ?? null)
+        }
       }
       return
     }
 
     if (tool === 'paint-plant' && activePlantId) {
+      const plant = plantMap.get(activePlantId)
+      const fp = plant?.footprintFt ?? 1
+
+      if (fp > 1) {
+        // Large plant stamp — check footprint fits within bed
+        if (col + fp > bed.widthFt || row + fp > bed.heightFt) return
+
+        // Check every cell in the footprint for conflicts (skip anchor itself)
+        for (let dc = 0; dc < fp; dc++) {
+          for (let dr = 0; dr < fp; dr++) {
+            if (dc === 0 && dr === 0) continue
+            const c = col + dc
+            const r = row + dr
+            if (largeSatelliteCells.has(`${c},${r}`)) return
+            const sq = squareMap.get(`${bed.id}-${c}-${r}`)
+            if (sq && plantingMap.has(sq.id)) return
+          }
+        }
+
+        if (!square) {
+          const newSquare = { id: uuidv4(), bedId: bed.id, col, row, useSubgrid: false }
+          await db.squares.add(newSquare)
+          square = newSquare
+        }
+
+        const existing = plantingMap.get(square.id)
+        const now = new Date().toISOString()
+        if (existing) {
+          await db.plantings.update(existing.id, { plantId: activePlantId, updatedAt: now })
+        } else {
+          await db.plantings.add({
+            id: uuidv4(),
+            squareId: square.id,
+            plantId: activePlantId,
+            subCol: null, subRow: null,
+            successionIndex: 0,
+            seedStartDate: null,
+            transplantOrSowDate: null,
+            expectedHarvestDate: null,
+            actualHarvestDate: null,
+            status: 'planned',
+            notes: '',
+            createdAt: now,
+            updatedAt: now,
+          })
+        }
+        return
+      }
+
+      // Normal 1×1 plant
       if (!square) {
         const newSquare = { id: uuidv4(), bedId: bed.id, col, row, useSubgrid: false }
         await db.squares.add(newSquare)
@@ -63,7 +148,6 @@ export function BedShape({ bed, scale, onSelect }: Props) {
       if (existing) {
         await db.plantings.update(existing.id, { plantId: activePlantId, updatedAt: now })
       } else {
-        // find max succession index for this square
         const succIdx = plantings.filter((p) => p.squareId === square!.id && p.subCol === (subCol ?? null)).length
         await db.plantings.add({
           id: uuidv4(),
@@ -115,9 +199,11 @@ export function BedShape({ bed, scale, onSelect }: Props) {
         cornerRadius={4 / scale}
       />
 
-      {/* Square/subgrid cells */}
+      {/* Square/subgrid cells — skip satellite cells (covered by large plant block) */}
       {Array.from({ length: bed.heightFt }, (_, row) =>
         Array.from({ length: bed.widthFt }, (_, col) => {
+          if (largeSatelliteCells.has(`${col},${row}`)) return null
+
           const square = squares.find((s) => s.col === col && s.row === row)
           const squareKey = square?.id ?? ''
 
@@ -146,19 +232,104 @@ export function BedShape({ bed, scale, onSelect }: Props) {
           const pl = plantingMap.get(squareKey) ?? null
           const plant = pl ? plantMap.get(pl.plantId) ?? null : null
 
+          // Skip anchor cells that belong to a large plant — rendered below as a block
+          if (plant && (plant.footprintFt ?? 1) > 1) return null
+
           return (
             <SquareCell
               key={`sq-${col}-${row}`}
               col={col} row={row}
               plant={plant}
+              variety={pl?.variety}
               scale={scale}
-              isSelected={selectedSquareId === squareKey}
-              onLeftClick={() => handleCellClick(col, row)}
+              isSelected={pl ? selectedPlantingIds.includes(pl.id) : selectedSquareId === squareKey}
+              onLeftClick={(ctrlKey) => handleCellClick(col, row, undefined, undefined, ctrlKey)}
               onRightClick={() => handleCellRightClick(col, row)}
             />
           )
         })
       )}
+
+      {/* Large plant blocks — rendered as a unified visual unit */}
+      {largePlantAnchors.map(({ col, row, plant, planting, squareId }) => {
+        const fp = plant.footprintFt!
+        const bx = col * CELL_PX
+        const by = row * CELL_PX
+        const bw = fp * CELL_PX
+        const bh = fp * CELL_PX
+        const cx = bx + bw / 2
+        const cy = by + bh / 2
+        const isSelectedPlanting = selectedPlantingIds.includes(planting.id)
+        const showBlockLabel = scale > 0.6
+        const blockVariety = planting.variety
+        const blockDisplayFull = blockVariety ? `${plant.name} (${blockVariety})` : plant.name
+        const blockDisplayInitial = blockVariety ? blockVariety.charAt(0).toUpperCase() : plant.name.charAt(0).toUpperCase()
+
+        return (
+          <Group key={`lp-${col}-${row}`}>
+            {/* Fill */}
+            <Rect
+              x={bx} y={by} width={bw} height={bh}
+              fill={hexToRgba(plant.color, 0.2)}
+              listening={false}
+            />
+            {/* Outer border */}
+            <Rect
+              x={bx} y={by} width={bw} height={bh}
+              fill="transparent"
+              stroke={isSelectedPlanting ? '#2563eb' : plant.color}
+              strokeWidth={(isSelectedPlanting ? 2.5 : 2) / scale}
+              cornerRadius={4 / scale}
+              listening={false}
+            />
+            {/* Center pip at grid crosshairs */}
+            <Circle
+              x={cx} y={cy}
+              radius={5}
+              fill={hexToRgba(plant.color, 0.75)}
+              listening={false}
+            />
+            {/* Label */}
+            {showBlockLabel && (
+              <Text
+                x={bx + 4 / scale}
+                y={cy + 8 / scale}
+                width={bw - 8 / scale}
+                align="center"
+                text={scale > 1.2 ? blockDisplayFull : blockDisplayInitial}
+                fontSize={scale > 1.2 ? 9 / scale : 14 / scale}
+                fill={plant.color}
+                fontStyle="bold"
+                listening={false}
+              />
+            )}
+            {/* Transparent click target covering the full block */}
+            <Rect
+              x={bx} y={by} width={bw} height={bh}
+              fill="transparent"
+              onClick={(e) => {
+                e.cancelBubble = true
+                setActiveBedId(bed.id)
+                if (tool === 'select') {
+                  if (e.evt.ctrlKey) {
+                    const next = selectedPlantingIds.includes(planting.id)
+                      ? selectedPlantingIds.filter(id => id !== planting.id)
+                      : [...selectedPlantingIds, planting.id]
+                    setSelectedPlantingIds(next)
+                  } else {
+                    setSelectedSquareId(squareId)
+                    setSelectedPlantingIds([planting.id])
+                  }
+                } else if (tool === 'erase-plant') {
+                  db.plantings.delete(planting.id)
+                  setSelectedSquareId(null)
+                  setSelectedPlantingId(null)
+                }
+              }}
+            />
+          </Group>
+        )
+      })}
 
       {/* Bed label */}
       {showLabel && (

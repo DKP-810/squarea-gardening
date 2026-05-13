@@ -17,6 +17,8 @@ export interface Plant {
   name: string;
   variety?: string;
   spacingDensity: SpacingDensity;
+  /** Side length of the square footprint in feet. 1 = 1×1 (default), 2 = 2×2, etc. */
+  footprintFt?: number;
   daysToHarvest: number;
   /** weeks before last frost to start indoors; null = direct sow only */
   indoorStartWeeks: number | null;
@@ -67,6 +69,7 @@ export interface Planting {
   subCol: number | null;
   subRow: number | null;
   successionIndex: number;
+  variety?: string;
   seedStartDate: string | null;
   transplantOrSowDate: string | null;
   expectedHarvestDate: string | null;

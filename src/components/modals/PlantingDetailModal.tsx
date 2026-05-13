@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { db } from '../../db/db'
 import { usePlant } from '../../hooks/usePlants'
-import { calcExpectedHarvest } from '../../utils/dateCalc'
+import { calcExpectedHarvest, formatDisplayDate } from '../../utils/dateCalc'
 import { useAppStore } from '../../store'
 import type { Planting, PlantingStatus } from '../../types'
 import { ConfirmModal } from './ConfirmModal'
@@ -25,6 +25,7 @@ const STATUS_OPTIONS: { value: PlantingStatus; label: string }[] = [
 export function PlantingDetailModal({ planting, onClose }: Props) {
   const plant = usePlant(planting.plantId)
   const { setSelectedPlantingId } = useAppStore()
+  const [variety, setVariety] = useState(planting.variety ?? '')
   const [seedStart, setSeedStart] = useState(planting.seedStartDate ?? '')
   const [sowDate, setSowDate] = useState(planting.transplantOrSowDate ?? '')
   const [actualHarvest, setActualHarvest] = useState(planting.actualHarvestDate ?? '')
@@ -39,6 +40,7 @@ export function PlantingDetailModal({ planting, onClose }: Props) {
   async function handleSave() {
     const now = new Date().toISOString()
     await db.plantings.update(planting.id, {
+      variety: variety || undefined,
       seedStartDate: seedStart || null,
       transplantOrSowDate: sowDate || null,
       expectedHarvestDate: expectedHarvest,
@@ -79,6 +81,16 @@ export function PlantingDetailModal({ planting, onClose }: Props) {
 
           <div className="p-5 space-y-4">
             <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Variety</label>
+              <input
+                type="text"
+                value={variety}
+                onChange={(e) => setVariety(e.target.value)}
+                placeholder={`e.g. Mortgage Lifter`}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Status</label>
               <select
                 value={status}
@@ -112,7 +124,7 @@ export function PlantingDetailModal({ planting, onClose }: Props) {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Expected Harvest</label>
                 <div className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600">
-                  {expectedHarvest ?? '—'}
+                  {formatDisplayDate(expectedHarvest)}
                 </div>
               </div>
               <div>

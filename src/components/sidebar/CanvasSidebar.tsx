@@ -2,17 +2,24 @@ import { useAppStore } from '../../store'
 import { PlantPicker } from './PlantPicker'
 import { BedPanel } from './BedPanel'
 import { SquarePanel } from './SquarePanel'
+import { BatchEditPanel } from './BatchEditPanel'
 
-export function CanvasSidebar() {
-  const { tool, activeBedId, selectedSquareId } = useAppStore()
+interface Props {
+  width: number
+}
+
+export function CanvasSidebar({ width }: Props) {
+  const { tool, activeBedId, selectedSquareId, selectedPlantingIds } = useAppStore()
+  const asideStyle = { width }
 
   const showPlantPicker = tool === 'paint-plant'
-  const showBedPanel = activeBedId && !showPlantPicker && tool !== 'add-bed'
-  const showSquarePanel = selectedSquareId && tool === 'select' && !showPlantPicker
+  const showBatchEdit = tool === 'select' && selectedPlantingIds.length > 1
+  const showBedPanel = activeBedId && !showPlantPicker && !showBatchEdit && tool !== 'add-bed'
+  const showSquarePanel = selectedSquareId && tool === 'select' && !showPlantPicker && !showBatchEdit
 
   if (showPlantPicker) {
     return (
-      <aside className="w-56 border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+      <aside style={asideStyle} className="border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Select a plant</div>
           <div className="text-xs text-gray-400 mt-0.5">Click a square to plant</div>
@@ -22,9 +29,22 @@ export function CanvasSidebar() {
     )
   }
 
+  if (showBatchEdit) {
+    return (
+      <aside style={asideStyle} className="border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Batch Edit</div>
+        </div>
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          <BatchEditPanel />
+        </div>
+      </aside>
+    )
+  }
+
   if (showSquarePanel) {
     return (
-      <aside className="w-56 border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+      <aside style={asideStyle} className="border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Square</div>
         </div>
@@ -37,7 +57,7 @@ export function CanvasSidebar() {
 
   if (showBedPanel) {
     return (
-      <aside className="w-56 border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+      <aside style={asideStyle} className="border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Bed</div>
         </div>
@@ -49,7 +69,7 @@ export function CanvasSidebar() {
   }
 
   return (
-    <aside className="w-56 border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
+    <aside style={asideStyle} className="border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-400 p-6 text-center">
         <div className="text-sm">
           {tool === 'add-bed' && 'Drag on the canvas to draw a bed'}

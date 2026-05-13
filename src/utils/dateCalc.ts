@@ -20,3 +20,10 @@ export function calcTransplantDate(lastFrostDate: string | null, transplantWeeks
   if (!isValid(d)) return null
   return format(addWeeks(d, transplantWeeksAfterFrost), 'yyyy-MM-dd')
 }
+
+/** Format a yyyy-MM-dd string for display (e.g. "Aug 15, 2026"). Returns '—' for null/invalid. */
+export function formatDisplayDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—'
+  const d = parseISO(dateStr)
+  return isValid(d) ? format(d, 'MMM d, yyyy') : '—'
+}

@@ -1,23 +1,23 @@
 import type { Plant } from '../types'
 
 export const DEFAULT_PLANTS: Omit<Plant, 'id' | 'isCustom'>[] = [
-  // Tomatoes
-  { name: 'Tomato (Indeterminate)', spacingDensity: 1, daysToHarvest: 75, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#e74c3c', notes: 'Stake or cage. Pinch suckers for larger fruit.' },
-  { name: 'Tomato (Determinate)', spacingDensity: 1, daysToHarvest: 65, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#c0392b', notes: 'Bush type. Good for canning.' },
-  { name: 'Cherry Tomato', spacingDensity: 1, daysToHarvest: 60, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#ff6b6b', notes: 'Very productive. Great in containers.' },
+  // Tomatoes — all need a 2×2 ft cage footprint per SFG method
+  { name: 'Tomato (Indeterminate)', spacingDensity: 1, footprintFt: 2, daysToHarvest: 75, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#e74c3c', notes: 'Stake or cage. Pinch suckers for larger fruit.' },
+  { name: 'Tomato (Determinate)', spacingDensity: 1, footprintFt: 2, daysToHarvest: 65, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#c0392b', notes: 'Bush type. Good for canning.' },
+  { name: 'Cherry Tomato', spacingDensity: 1, footprintFt: 2, daysToHarvest: 60, indoorStartWeeks: 6, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#ff6b6b', notes: 'Very productive. Great in containers.' },
   // Peppers
   { name: 'Bell Pepper', spacingDensity: 1, daysToHarvest: 70, indoorStartWeeks: 8, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#f39c12', notes: 'Start indoors early. Needs warm soil.' },
   { name: 'Hot Pepper', spacingDensity: 1, daysToHarvest: 75, indoorStartWeeks: 8, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#e67e22', notes: 'More heat = more capsaicin.' },
   // Eggplant
   { name: 'Eggplant', spacingDensity: 1, daysToHarvest: 75, indoorStartWeeks: 8, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#8e44ad', notes: 'Loves heat. Keep well watered.' },
-  // Squash
-  { name: 'Zucchini', spacingDensity: 1, daysToHarvest: 55, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#27ae60', notes: 'Prolific producer. Harvest when small.' },
-  { name: 'Yellow Summer Squash', spacingDensity: 1, daysToHarvest: 50, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#f1c40f', notes: 'Harvest young for best flavor.' },
-  { name: 'Butternut Squash', spacingDensity: 1, daysToHarvest: 110, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#e5a847', notes: 'Needs lots of space. Cure after harvest.' },
-  { name: 'Pumpkin', spacingDensity: 1, daysToHarvest: 100, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#d35400', notes: 'Plant after frost. Needs ample space.' },
-  // Cucumbers
+  // Squash — 1 plant per 2×2 ft per SFG method
+  { name: 'Zucchini', spacingDensity: 1, footprintFt: 2, daysToHarvest: 55, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#27ae60', notes: 'Prolific producer. Harvest when small.' },
+  { name: 'Yellow Summer Squash', spacingDensity: 1, footprintFt: 2, daysToHarvest: 50, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#f1c40f', notes: 'Harvest young for best flavor.' },
+  { name: 'Butternut Squash', spacingDensity: 1, footprintFt: 2, daysToHarvest: 110, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#e5a847', notes: 'Needs lots of space. Cure after harvest.' },
+  { name: 'Pumpkin', spacingDensity: 1, footprintFt: 2, daysToHarvest: 100, indoorStartWeeks: 0, transplantWeeksAfterFrost: 1, sunRequirement: 'full-sun', color: '#d35400', notes: 'Plant after frost. Needs ample space.' },
+  // Cucumbers — 2/sqft on trellis per SFG method
   { name: 'Cucumber (Bush)', spacingDensity: 2, daysToHarvest: 55, indoorStartWeeks: 0, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#2ecc71', notes: 'Compact bush type. Good for small spaces.' },
-  { name: 'Cucumber (Vining)', spacingDensity: 1, daysToHarvest: 60, indoorStartWeeks: 0, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#1abc9c', notes: 'Train up trellis to save space.' },
+  { name: 'Cucumber (Vining)', spacingDensity: 2, daysToHarvest: 60, indoorStartWeeks: 0, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#1abc9c', notes: 'Train up trellis to save space.' },
   // Brassicas
   { name: 'Broccoli', spacingDensity: 1, daysToHarvest: 80, indoorStartWeeks: 6, transplantWeeksAfterFrost: -2, sunRequirement: 'full-sun', color: '#1e8449', notes: 'Cool season crop. Plant early or fall.' },
   { name: 'Cauliflower', spacingDensity: 1, daysToHarvest: 85, indoorStartWeeks: 6, transplantWeeksAfterFrost: -2, sunRequirement: 'full-sun', color: '#d5dbdb', notes: 'Blanch heads by folding leaves over.' },
@@ -59,8 +59,8 @@ export const DEFAULT_PLANTS: Omit<Plant, 'id' | 'isCustom'>[] = [
   // Corn
   { name: 'Corn (Sweet)', spacingDensity: 1, daysToHarvest: 80, indoorStartWeeks: 0, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#f9e79f', notes: 'Plant in blocks for pollination. Harvest when silks brown.' },
   // Melons
-  { name: 'Watermelon', spacingDensity: 1, daysToHarvest: 90, indoorStartWeeks: 4, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#f1948a', notes: 'Needs space. Check for hollow thump when ripe.' },
-  { name: 'Cantaloupe', spacingDensity: 1, daysToHarvest: 85, indoorStartWeeks: 4, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#fad7a0', notes: 'Slip from vine when ripe. Fragrant when ready.' },
+  { name: 'Watermelon', spacingDensity: 1, footprintFt: 2, daysToHarvest: 90, indoorStartWeeks: 4, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#f1948a', notes: 'Needs space. Check for hollow thump when ripe.' },
+  { name: 'Cantaloupe', spacingDensity: 1, footprintFt: 2, daysToHarvest: 85, indoorStartWeeks: 4, transplantWeeksAfterFrost: 2, sunRequirement: 'full-sun', color: '#fad7a0', notes: 'Slip from vine when ripe. Fragrant when ready.' },
   // Other
   { name: 'Strawberry', spacingDensity: 4, daysToHarvest: 60, indoorStartWeeks: null, transplantWeeksAfterFrost: 0, sunRequirement: 'full-sun', color: '#e74c3c', notes: 'Perennial. Everbearing or June-bearing varieties.' },
   { name: 'Celery', spacingDensity: 4, daysToHarvest: 130, indoorStartWeeks: 10, transplantWeeksAfterFrost: 0, sunRequirement: 'partial-shade', color: '#a9cce3', notes: 'Needs consistent moisture. Long season crop.' },

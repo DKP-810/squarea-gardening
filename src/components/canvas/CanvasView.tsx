@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { AlertCircle, X } from 'lucide-react'
 import { GardenStage } from './GardenStage'
 import { CanvasSidebar } from '../sidebar/CanvasSidebar'
@@ -6,12 +6,41 @@ import { useActiveGarden } from '../../hooks/useGarden'
 import { useAppStore } from '../../store'
 import { GardenSettingsModal } from '../modals/GardenSettingsModal'
 
+const MIN_SIDEBAR = 200
+const MAX_SIDEBAR = 420
+
 export function CanvasView() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 800, height: 600 })
   const [overlapToast, setOverlapToast] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(224)
+  const [isResizing, setIsResizing] = useState(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(0)
   const garden = useActiveGarden()
   const { gardenModalOpen, setGardenModalOpen, activeGardenId } = useAppStore()
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    dragStartX.current = e.clientX
+    dragStartWidth.current = sidebarWidth
+    setIsResizing(true)
+    e.preventDefault()
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    if (!isResizing) return
+    function onMouseMove(e: MouseEvent) {
+      const delta = dragStartX.current - e.clientX
+      setSidebarWidth(Math.max(MIN_SIDEBAR, Math.min(MAX_SIDEBAR, dragStartWidth.current + delta)))
+    }
+    function onMouseUp() { setIsResizing(false) }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [isResizing])
 
   useEffect(() => {
     const el = containerRef.current
@@ -47,7 +76,7 @@ export function CanvasView() {
   }
 
   return (
-    <div className="flex flex-1 overflow-hidden relative">
+    <div className={`flex flex-1 overflow-hidden relative${isResizing ? ' select-none cursor-col-resize' : ''}`}>
       {/* Canvas area */}
       <div ref={containerRef} className="flex-1 overflow-hidden bg-gray-50 relative">
         {garden && !garden.lastFrostDate && (
@@ -68,8 +97,14 @@ export function CanvasView() {
         <GardenStage width={size.width} height={size.height} onBedOverlap={showOverlapToast} />
       </div>
 
+      {/* Resize handle */}
+      <div
+        className={`w-1 flex-shrink-0 cursor-col-resize transition-colors ${isResizing ? 'bg-green-500' : 'bg-gray-200 hover:bg-green-400'}`}
+        onMouseDown={onResizeMouseDown}
+      />
+
       {/* Sidebar */}
-      <CanvasSidebar />
+      <CanvasSidebar width={sidebarWidth} />
 
       {gardenModalOpen && <GardenSettingsModal onClose={() => setGardenModalOpen(false)} />}
     </div>
