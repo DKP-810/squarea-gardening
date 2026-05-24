@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Trash2 } from 'lucide-react'
 import { db } from '../../db/db'
 import { useAppStore } from '../../store'
+import { pushBedAction } from '../../store/bedHistory'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { ConfirmModal } from '../modals/ConfirmModal'
 
@@ -15,6 +16,7 @@ export function BedPanel() {
   const [color, setColor] = useState('#16a34a')
   const [notes, setNotes] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (bed) {
@@ -27,14 +29,22 @@ export function BedPanel() {
 
   async function handleSave() {
     if (!bed) return
-    await db.beds.update(bed.id, { name, bedType, color, notes })
+    const before = { name: bed.name, bedType: bed.bedType, color: bed.color, notes: bed.notes }
+    const after = { name, bedType, color, notes }
+    pushBedAction({ type: 'edit-bed', bedId: bed.id, before, after })
+    await db.beds.update(bed.id, after)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1500)
   }
 
   async function handleDelete() {
     if (!bed) return
-    // Delete squares and plantings for this bed
     const squares = await db.squares.where('bedId').equals(bed.id).toArray()
     const squareIds = squares.map((s) => s.id)
+    const plantings = squareIds.length
+      ? await db.plantings.where('squareId').anyOf(squareIds).toArray()
+      : []
+    pushBedAction({ type: 'delete-bed', bed, squares, plantings })
     if (squareIds.length) await db.plantings.where('squareId').anyOf(squareIds).delete()
     await db.squares.where('bedId').equals(bed.id).delete()
     await db.beds.delete(bed.id)
@@ -49,7 +59,8 @@ export function BedPanel() {
     <div className="p-4 space-y-4">
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Name</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} onBlur={handleSave}
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
       </div>
 
@@ -84,10 +95,17 @@ export function BedPanel() {
 
       <div>
         <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Notes</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={handleSave}
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
           rows={3} placeholder="Notes about this bed..."
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none" />
       </div>
+
+      <button onClick={handleSave}
+        className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+          saved ? 'bg-green-100 text-green-700' : 'bg-green-600 text-white hover:bg-green-700'
+        }`}>
+        {saved ? 'Saved!' : 'Save'}
+      </button>
 
       <button onClick={() => setShowConfirm(true)}
         className="w-full flex items-center justify-center gap-2 py-2 text-sm text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">

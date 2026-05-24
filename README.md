@@ -1,73 +1,81 @@
-# React + TypeScript + Vite
+# Squarea Gardening
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Square Foot Gardening planner that runs entirely in the browser — no account, no backend, no sync. All data lives in your browser's IndexedDB via Dexie.js.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Canvas View
+- Draw raised or in-ground beds by dragging
+- Paint plants into 1×1 ft squares or 2×2 ft blocks (tomatoes, squash, melons)
+- Subgrid mode (right-click a square): divide one square foot into a 4×4 grid for high-density crops
+- Select tool with multi-select (Ctrl+click) for batch editing
+- Batch painting: plants placed in the same session share a batch ID for coordinated tracking
+- Zoom (scroll wheel) and pan (Space+drag or click+drag in select mode)
+- Keyboard shortcuts: `S` select, `B` bed, `P` paint, `E` erase, `Esc` clear
 
-## React Compiler
+### Sidebar Panels
+- **Bed Panel**: rename, recolor, switch type; click the bed name pill on the canvas to open from any tool mode
+- **Plant Panel**: per-planting details — variety, status, dates, expected harvest
+- **Batch Edit Panel**: edit variety, status, seed start, transplant/sow, actual harvest, and notes across an entire batch at once; fields left blank are skipped
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Calendar View
+- Gantt timeline showing seed start → transplant → harvest windows per planting
+- Batches appear as collapsed composite rows; click to expand individual plantings
+- Scroll the timeline and the label pane stay in sync
 
-## Expanding the ESLint configuration
+### Plant Library
+- 48 built-in plants with SFG-correct spacing (1–16/sqft) and large-footprint support (1 per 4sqft for 2×2 block plants)
+- Edit any plant — spacing selector covers both small-density and large-footprint options
+- **Restore Defaults** button resets a built-in plant to its original values
+- **Duplicate** creates a custom copy ("Copy of …") you can freely modify
+- Add fully custom plants with colors, sun requirements, days-to-harvest, and indoor start timing
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+| Layer | Library |
+|-------|---------|
+| UI | React 18 + TypeScript 5 |
+| Build | Vite 5 |
+| Canvas | react-konva (Konva.js) |
+| Styling | Tailwind CSS 3 |
+| UI State | Zustand + immer |
+| Data | Dexie.js (IndexedDB) + dexie-react-hooks |
+| Date math | date-fns |
+| Icons | lucide-react |
+| PWA | vite-plugin-pwa |
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Running locally
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev        # dev server at http://localhost:5173
+npx tsc --noEmit   # type check
+npm run build      # production build → dist/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+> WSL users: `nvm` is already loaded in interactive terminals. The long `export NVM_DIR=…` form is only needed in non-interactive shells.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Data model
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+Garden
+  └─ Bed (x/y/widthFt/heightFt, color, bedType)
+       └─ Square (col/row, useSubgrid) — lazy-created on first interaction
+            └─ Planting (plantId, batchId?, variety?, status, dates…)
+                         └─ Plant (spacingDensity, footprintFt?, daysToHarvest…)
+```
+
+Key rules:
+- `expectedHarvestDate` is always `transplantOrSowDate + daysToHarvest` — never set directly
+- `Plant.footprintFt: 2` means one planting occupies a 2×2 ft block; only the anchor square stores the record
+- `Planting.batchId` groups all plantings from a single paint session for bulk selection and editing
+
+## What's not done yet
+
+- Batch delete / move as a unit
+- Plant-type change on a batch member (change all vs. split to new batch)
+- Subgrid multi-select
+- 3×3 footprint plants (large pumpkins)
+- Mobile / touch support
+- Unit tests
+- PWA icons + Lighthouse audit

@@ -10,6 +10,7 @@ import { GridLayer } from './GridLayer'
 import { BedShape } from './BedShape'
 import { DraftBedOverlay } from './DraftBedOverlay'
 import { PlantStampOverlay } from './PlantStampOverlay'
+import { pushBedAction, undoBed, redoBed } from '../../store/bedHistory'
 import type Konva from 'konva'
 import type { Bed } from '../../types'
 
@@ -141,6 +142,7 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
           createdAt: new Date().toISOString(),
         }
         await db.beds.add(newBed)
+        pushBedAction({ type: 'add-bed', bed: newBed })
         setActiveBedId(newBed.id)
       } else {
         onBedOverlap()
@@ -179,7 +181,22 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      const { setTool, setActivePlantId } = useAppStore.getState()
+      const { setTool, setActivePlantId, setActiveBedId: setBedId } = useAppStore.getState()
+
+      // Undo / redo for bed operations
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault()
+        undoBed().then(restoredBedId => {
+          if (restoredBedId) setBedId(restoredBedId)
+        })
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) {
+        e.preventDefault()
+        redoBed()
+        return
+      }
+
       if (e.key === 'b' || e.key === 'B') setTool('add-bed')
       if (e.key === 's' || e.key === 'S') setTool('select')
       if (e.key === 'p' || e.key === 'P') setTool('paint-plant')
@@ -189,6 +206,7 @@ export function GardenStage({ width, height, onBedOverlap }: Props) {
         setActivePlantId(null)
         setActiveBedId(null)
         setSelectedSquareId(null)
+        useAppStore.getState().setSelectedPlantingIds([])
       }
     }
     window.addEventListener('keydown', handleKey)

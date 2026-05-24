@@ -66,6 +66,7 @@ export interface Planting {
   id: string;
   squareId: string;
   plantId: string;
+  batchId?: string;
   subCol: number | null;
   subRow: number | null;
   successionIndex: number;

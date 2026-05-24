@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
+import { v4 as uuidv4 } from 'uuid'
 import type { AppView, CanvasTool } from '../types'
 
 interface CanvasViewport {
@@ -23,6 +24,7 @@ interface AppState {
   // Canvas
   tool: CanvasTool
   activePlantId: string | null
+  paintBatchId: string | null
   activeBedId: string | null
   selectedSquareId: string | null
   selectedPlantingId: string | null
@@ -40,6 +42,7 @@ interface AppState {
   setView: (view: AppView) => void
   setTool: (tool: CanvasTool) => void
   setActivePlantId: (id: string | null) => void
+  newPaintBatch: () => void
   setActiveBedId: (id: string | null) => void
   setSelectedSquareId: (id: string | null) => void
   setSelectedPlantingId: (id: string | null) => void
@@ -59,6 +62,7 @@ export const useAppStore = create<AppState>()(
     view: 'canvas',
     tool: 'select',
     activePlantId: null,
+    paintBatchId: null,
     activeBedId: null,
     selectedSquareId: null,
     selectedPlantingId: null,
@@ -72,7 +76,8 @@ export const useAppStore = create<AppState>()(
 
     setView: (view) => set((s) => { s.view = view }),
     setTool: (tool) => set((s) => { s.tool = tool }),
-    setActivePlantId: (id) => set((s) => { s.activePlantId = id }),
+    setActivePlantId: (id) => set((s) => { s.activePlantId = id; s.paintBatchId = id ? uuidv4() : null }),
+    newPaintBatch: () => set((s) => { s.paintBatchId = uuidv4() }),
     setActiveBedId: (id) => set((s) => { s.activeBedId = id }),
     setSelectedSquareId: (id) => set((s) => { s.selectedSquareId = id }),
     setSelectedPlantingId: (id) => set((s) => { s.selectedPlantingId = id }),

@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function BedShape({ bed, scale, onSelect }: Props) {
-  const { tool, activePlantId, selectedSquareId, selectedPlantingId, selectedPlantingIds, setSelectedSquareId, setSelectedPlantingId, setSelectedPlantingIds, setActiveBedId } = useAppStore()
+  const { tool, activePlantId, paintBatchId, selectedSquareId, selectedPlantingId, selectedPlantingIds, setSelectedSquareId, setSelectedPlantingId, setSelectedPlantingIds, setActiveBedId, setTool } = useAppStore()
   const squares = useSquares(bed.id)
   const squareIds = useMemo(() => squares.map((s) => s.id), [squares])
   const plantings = useAllPlantingsForSquares(squareIds)
@@ -63,6 +63,25 @@ export function BedShape({ bed, scale, onSelect }: Props) {
     return cells
   }, [largePlantAnchors])
 
+  async function handleSelect(pl: Planting, squareId: string, ctrlKey: boolean) {
+    setActiveBedId(bed.id)
+    setSelectedSquareId(squareId)
+
+    const ids = pl.batchId
+      ? (await db.plantings.where('batchId').equals(pl.batchId).toArray()).map(m => m.id)
+      : [pl.id]
+
+    if (ctrlKey) {
+      const allIn = ids.every(id => selectedPlantingIds.includes(id))
+      const next = allIn
+        ? selectedPlantingIds.filter(id => !ids.includes(id))
+        : [...new Set([...selectedPlantingIds, ...ids])]
+      setSelectedPlantingIds(next)
+    } else {
+      setSelectedPlantingIds(ids)
+    }
+  }
+
   async function handleCellClick(col: number, row: number, subCol?: number, subRow?: number, ctrlKey = false) {
     const squareKey = `${bed.id}-${col}-${row}`
     let square = squareMap.get(squareKey) ?? squares.find((s) => s.col === col && s.row === row)
@@ -72,15 +91,11 @@ export function BedShape({ bed, scale, onSelect }: Props) {
       if (square) {
         const pKey = subCol != null ? `${square.id}-${subCol}-${subRow}` : square.id
         const pl = plantingMap.get(pKey)
-        if (ctrlKey && pl) {
-          const next = selectedPlantingIds.includes(pl.id)
-            ? selectedPlantingIds.filter(id => id !== pl.id)
-            : [...selectedPlantingIds, pl.id]
-          setSelectedPlantingIds(next)
+        if (pl) {
+          await handleSelect(pl, square.id, ctrlKey)
         } else {
           setSelectedSquareId(square.id)
-          setSelectedPlantingIds(pl ? [pl.id] : [])
-          setSelectedPlantingId(pl?.id ?? null)
+          setSelectedPlantingIds([])
         }
       }
       return
@@ -121,6 +136,7 @@ export function BedShape({ bed, scale, onSelect }: Props) {
             id: uuidv4(),
             squareId: square.id,
             plantId: activePlantId,
+            batchId: paintBatchId ?? undefined,
             subCol: null, subRow: null,
             successionIndex: 0,
             seedStartDate: null,
@@ -153,6 +169,7 @@ export function BedShape({ bed, scale, onSelect }: Props) {
           id: uuidv4(),
           squareId: square.id,
           plantId: activePlantId,
+          batchId: paintBatchId ?? undefined,
           subCol: subCol ?? null,
           subRow: subRow ?? null,
           successionIndex: succIdx,
@@ -307,19 +324,10 @@ export function BedShape({ bed, scale, onSelect }: Props) {
             <Rect
               x={bx} y={by} width={bw} height={bh}
               fill="transparent"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.cancelBubble = true
-                setActiveBedId(bed.id)
                 if (tool === 'select') {
-                  if (e.evt.ctrlKey) {
-                    const next = selectedPlantingIds.includes(planting.id)
-                      ? selectedPlantingIds.filter(id => id !== planting.id)
-                      : [...selectedPlantingIds, planting.id]
-                    setSelectedPlantingIds(next)
-                  } else {
-                    setSelectedSquareId(squareId)
-                    setSelectedPlantingIds([planting.id])
-                  }
+                  await handleSelect(planting, squareId, e.evt.ctrlKey)
                 } else if (tool === 'erase-plant') {
                   db.plantings.delete(planting.id)
                   setSelectedSquareId(null)
@@ -331,16 +339,48 @@ export function BedShape({ bed, scale, onSelect }: Props) {
         )
       })}
 
-      {/* Bed label */}
+      {/* Bed name label — clickable pill to select bed in any tool mode */}
       {showLabel && (
-        <Text
-          text={bed.name}
-          x={6 / scale} y={6 / scale}
-          fontSize={11 / scale}
-          fill={bed.color}
-          fontStyle="bold"
-          listening={false}
-        />
+        <Group
+          x={4 / scale}
+          y={4 / scale}
+          onClick={(e) => {
+            e.cancelBubble = true
+            setActiveBedId(bed.id)
+            setTool('select')
+            setSelectedPlantingIds([])
+            setSelectedSquareId(null)
+          }}
+          onMouseEnter={(e) => {
+            const container = e.target.getStage()?.container()
+            if (container) container.style.cursor = 'pointer'
+          }}
+          onMouseLeave={(e) => {
+            const container = e.target.getStage()?.container()
+            if (container) container.style.cursor =
+              tool === 'add-bed' ? 'crosshair' :
+              tool === 'paint-plant' ? 'cell' :
+              tool === 'erase-plant' ? 'not-allowed' : 'default'
+          }}
+        >
+          <Rect
+            width={(bed.name.length * 7 + 16) / scale}
+            height={19 / scale}
+            fill={hexToRgba(bed.color, 0.12)}
+            stroke={hexToRgba(bed.color, 0.35)}
+            strokeWidth={1 / scale}
+            cornerRadius={3 / scale}
+          />
+          <Text
+            text={bed.name}
+            x={8 / scale}
+            y={4 / scale}
+            fontSize={11 / scale}
+            fill={bed.color}
+            fontStyle="bold"
+            listening={false}
+          />
+        </Group>
       )}
     </Group>
   )

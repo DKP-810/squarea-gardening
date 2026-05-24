@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Search, Plus, Edit2, Trash2, Leaf, Sun, Cloud, CloudOff } from 'lucide-react'
+import { Search, Plus, Edit2, Trash2, Copy, Leaf, Sun, Cloud, CloudOff } from 'lucide-react'
+import { v4 as uuidv4 } from 'uuid'
 import { usePlants } from '../../hooks/usePlants'
 import { db } from '../../db/db'
 import type { Plant } from '../../types'
@@ -27,6 +28,15 @@ export function PlantsView() {
   async function handleDelete(p: Plant) {
     await db.plants.delete(p.id)
     setDeletePlant(null)
+  }
+
+  async function handleDuplicate(p: Plant) {
+    await db.plants.add({ ...p, id: uuidv4(), name: `Copy of ${p.name}`, isCustom: true })
+  }
+
+  function spacingLabel(p: Plant): string {
+    if ((p.footprintFt ?? 1) >= 2) return `1 per ${p.footprintFt! * p.footprintFt!}sqft`
+    return `${p.spacingDensity}/sqft`
   }
 
   return (
@@ -75,10 +85,13 @@ export function PlantsView() {
                     {p.name.charAt(0)}
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setEditPlant(p)} className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+                    <button onClick={() => setEditPlant(p)} title="Edit" className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
                       <Edit2 size={13} />
                     </button>
-                    <button onClick={() => setDeletePlant(p)} className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
+                    <button onClick={() => handleDuplicate(p)} title="Duplicate" className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-500 transition-colors">
+                      <Copy size={13} />
+                    </button>
+                    <button onClick={() => setDeletePlant(p)} title="Delete" className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors">
                       <Trash2 size={13} />
                     </button>
                   </div>
@@ -91,7 +104,7 @@ export function PlantsView() {
                   <span className="flex items-center gap-0.5 text-xs text-gray-500 bg-gray-50 rounded px-1.5 py-0.5">
                     {SUN_ICONS[p.sunRequirement]}
                   </span>
-                  <span className="text-xs text-gray-500 bg-gray-50 rounded px-1.5 py-0.5">{p.spacingDensity}/sqft</span>
+                  <span className="text-xs text-gray-500 bg-gray-50 rounded px-1.5 py-0.5">{spacingLabel(p)}</span>
                   <span className="text-xs text-gray-500 bg-gray-50 rounded px-1.5 py-0.5">{p.daysToHarvest}d</span>
                   {p.isCustom && <span className="text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5">custom</span>}
                 </div>

@@ -1,19 +1,31 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, RotateCcw } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../../db/db'
+import { DEFAULT_PLANTS } from '../../data/defaultPlants'
 import type { Plant, SpacingDensity, SunRequirement } from '../../types'
+
+type SpacingChoice = '16' | '9' | '8' | '4' | '2' | '1' | '2x2'
 
 interface Props {
   plant?: Plant
   onClose: () => void
 }
 
-const DENSITIES: SpacingDensity[] = [1, 2, 4, 8, 9, 16]
+const SPACING_OPTIONS: { value: SpacingChoice; label: string; title: string }[] = [
+  { value: '16', label: '16/sqft', title: '16 plants per square foot' },
+  { value: '9',  label: '9/sqft',  title: '9 plants per square foot' },
+  { value: '8',  label: '8/sqft',  title: '8 plants per square foot' },
+  { value: '4',  label: '4/sqft',  title: '4 plants per square foot' },
+  { value: '2',  label: '2/sqft',  title: '2 plants per square foot' },
+  { value: '1',  label: '1/sqft',  title: '1 plant per square foot' },
+  { value: '2x2', label: '1 per 4sqft', title: '1 plant per 2×2 ft block (tomatoes, squash, melons)' },
+]
+
 const SUN_OPTIONS: { value: SunRequirement; label: string }[] = [
-  { value: 'full-sun', label: 'Full Sun (6+ hrs)' },
+  { value: 'full-sun',      label: 'Full Sun (6+ hrs)' },
   { value: 'partial-shade', label: 'Partial Shade (3–6 hrs)' },
-  { value: 'full-shade', label: 'Full Shade (<3 hrs)' },
+  { value: 'full-shade',    label: 'Full Shade (<3 hrs)' },
 ]
 
 const PRESET_COLORS = [
@@ -21,11 +33,19 @@ const PRESET_COLORS = [
   '#3498db','#9b59b6','#e91e63','#795548','#607d8b',
 ]
 
+function plantToSpacing(plant?: Plant): SpacingChoice {
+  if (!plant) return '1'
+  if ((plant.footprintFt ?? 1) >= 2) return '2x2'
+  return String(plant.spacingDensity) as SpacingChoice
+}
+
 export function PlantEditModal({ plant, onClose }: Props) {
   const isNew = !plant
+  const defaultEntry = plant ? DEFAULT_PLANTS.find(d => d.name === plant.name) : undefined
+
   const [name, setName] = useState(plant?.name ?? '')
   const [variety, setVariety] = useState(plant?.variety ?? '')
-  const [density, setDensity] = useState<SpacingDensity>(plant?.spacingDensity ?? 1)
+  const [spacing, setSpacing] = useState<SpacingChoice>(plantToSpacing(plant))
   const [dth, setDth] = useState(String(plant?.daysToHarvest ?? 60))
   const [indoorWks, setIndoorWks] = useState(plant?.indoorStartWeeks != null ? String(plant.indoorStartWeeks) : '')
   const [txpWks, setTxpWks] = useState(String(plant?.transplantWeeksAfterFrost ?? 0))
@@ -35,11 +55,14 @@ export function PlantEditModal({ plant, onClose }: Props) {
 
   async function handleSave() {
     if (!name.trim()) return
+    const spacingDensity: SpacingDensity = spacing === '2x2' ? 1 : (Number(spacing) as SpacingDensity)
+    const footprintFt = spacing === '2x2' ? 2 : undefined
     const data: Plant = {
       id: plant?.id ?? uuidv4(),
       name: name.trim(),
       variety: variety.trim() || undefined,
-      spacingDensity: density,
+      spacingDensity,
+      footprintFt,
       daysToHarvest: Number(dth) || 60,
       indoorStartWeeks: indoorWks !== '' ? Number(indoorWks) : null,
       transplantWeeksAfterFrost: Number(txpWks) || 0,
@@ -53,6 +76,12 @@ export function PlantEditModal({ plant, onClose }: Props) {
     } else {
       await db.plants.put(data)
     }
+    onClose()
+  }
+
+  async function handleRestoreDefaults() {
+    if (!plant || !defaultEntry) return
+    await db.plants.put({ ...defaultEntry, id: plant.id, isCustom: false })
     onClose()
   }
 
@@ -88,15 +117,22 @@ export function PlantEditModal({ plant, onClose }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Plants per sq ft</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1 uppercase tracking-wide">Spacing</label>
             <div className="flex gap-2 flex-wrap">
-              {DENSITIES.map((d) => (
-                <button key={d} onClick={() => setDensity(d)}
-                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${density === d ? 'bg-green-600 text-white border-green-600' : 'border-gray-300 hover:bg-gray-50'}`}>
-                  {d}
+              {SPACING_OPTIONS.map((o) => (
+                <button key={o.value} onClick={() => setSpacing(o.value)} title={o.title}
+                  className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                    spacing === o.value
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'border-gray-300 hover:bg-gray-50'
+                  }`}>
+                  {o.label}
                 </button>
               ))}
             </div>
+            {spacing === '2x2' && (
+              <p className="mt-1.5 text-xs text-gray-400">Occupies a 2×2 ft block on the canvas. Use for tomatoes, squash, and melons.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -145,7 +181,13 @@ export function PlantEditModal({ plant, onClose }: Props) {
           </div>
         </div>
 
-        <div className="flex gap-3 justify-end p-5 border-t border-gray-100">
+        <div className="flex items-center gap-3 p-5 border-t border-gray-100">
+          {defaultEntry && (
+            <button onClick={handleRestoreDefaults}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg border border-gray-300 text-gray-500 hover:bg-gray-50 transition-colors mr-auto">
+              <RotateCcw size={12} /> Restore Defaults
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
             Cancel
           </button>

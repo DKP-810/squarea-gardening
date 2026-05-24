@@ -17,6 +17,13 @@ class SquareaDB extends Dexie {
       plantings: 'id, squareId, plantId, transplantOrSowDate',
       plants: 'id, name',
     })
+    this.version(2).stores({
+      gardens: 'id',
+      beds: 'id, gardenId',
+      squares: 'id, bedId, [bedId+col+row]',
+      plantings: 'id, squareId, plantId, batchId, transplantOrSowDate',
+      plants: 'id, name',
+    })
   }
 }
 

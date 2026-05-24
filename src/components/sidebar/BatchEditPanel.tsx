@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { X } from 'lucide-react'
 import { db } from '../../db/db'
@@ -52,6 +52,39 @@ export function BatchEditPanel() {
   const [notes, setNotes] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // When selection changes, pre-populate fields with current DB values (blank if mixed across members)
+  useEffect(() => {
+    let cancelled = false
+    setSaved(false)
+
+    if (selectedPlantingIds.length === 0) {
+      setVariety(null); setStatus(null); setSeedStart(null)
+      setSowDate(null); setActualHarvest(null); setNotes(null)
+      return
+    }
+
+    db.plantings.where('id').anyOf(selectedPlantingIds).toArray().then(plantings => {
+      if (cancelled || plantings.length === 0) return
+
+      function uniform(vals: (string | null | undefined)[]): string | null {
+        const strs = vals.map(v => v ?? '')
+        return new Set(strs).size === 1 ? (strs[0] || null) : null
+      }
+
+      const statusVals = plantings.map(p => p.status)
+      const uniformStatus = new Set(statusVals).size === 1 ? statusVals[0] : null
+
+      setVariety(uniform(plantings.map(p => p.variety)))
+      setStatus(uniformStatus)
+      setSeedStart(uniform(plantings.map(p => p.seedStartDate)))
+      setSowDate(uniform(plantings.map(p => p.transplantOrSowDate)))
+      setActualHarvest(uniform(plantings.map(p => p.actualHarvestDate)))
+      setNotes(uniform(plantings.map(p => p.notes)))
+    })
+
+    return () => { cancelled = true }
+  }, [selectedPlantingIds.join(',')])
+
   function clearSelection() {
     setSelectedPlantingIds([])
     setSelectedPlantingId(null)
@@ -59,9 +92,12 @@ export function BatchEditPanel() {
   }
 
   async function handleSave() {
+    if (selectedPlantingIds.length === 0) return
     const now = new Date().toISOString()
+    // Query directly from DB to avoid stale useLiveQuery closure
+    const plantingsToSave = await db.plantings.where('id').anyOf(selectedPlantingIds).toArray()
     await Promise.all(
-      selectedPlantings.map(async (pl) => {
+      plantingsToSave.map(async (pl) => {
         const plant = plantMap.get(pl.plantId)
         const changes: Record<string, unknown> = { updatedAt: now }
         if (variety !== null) changes.variety = variety || undefined

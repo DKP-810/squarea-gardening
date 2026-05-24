@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { parseISO, isValid, startOfYear, differenceInDays, format } from 'date-fns'
@@ -28,11 +28,17 @@ interface PlantingRowData {
   bed: Bed
 }
 
+type CalendarEntry =
+  | { type: 'single'; row: PlantingRowData }
+  | { type: 'batch'; batchId: string; plant: Plant; variety: string | null; rows: PlantingRowData[] }
+
 export function CalendarView() {
   const { calendarYear, setCalendarYear, setSelectedPlantingId, selectedPlantingId } = useAppStore()
   const garden = useActiveGarden()
   const beds = useBeds()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const labelScrollRef = useRef<HTMLDivElement>(null)
+  const [expandedBatches, setExpandedBatches] = useState<Set<string>>(new Set())
 
   const allSquares = useLiveQuery(
     () => beds.length ? db.squares.where('bedId').anyOf(beds.map((b) => b.id)).toArray() : [],
@@ -52,7 +58,6 @@ export function CalendarView() {
   const squareMap = new Map(allSquares.map((s) => [s.id, s]))
   const bedMap = new Map(beds.map((b) => [b.id, b]))
 
-  // Filter to plantings that have at least one date set in the calendar year, or are planned
   const rows: PlantingRowData[] = []
   allPlantings.forEach((pl) => {
     const plant = plantMap.get(pl.plantId)
@@ -63,7 +68,6 @@ export function CalendarView() {
     rows.push({ planting: pl, plant, square, bed })
   })
 
-  // Sort by bed name, then square position, then succession
   rows.sort((a, b) => {
     const bedCmp = a.bed.name.localeCompare(b.bed.name)
     if (bedCmp !== 0) return bedCmp
@@ -72,10 +76,38 @@ export function CalendarView() {
     return a.planting.successionIndex - b.planting.successionIndex
   })
 
+  // Group sorted rows into batch entries and singles
+  const entries: CalendarEntry[] = []
+  const seenBatches = new Set<string>()
+  for (const row of rows) {
+    const bid = row.planting.batchId
+    if (!bid) {
+      entries.push({ type: 'single', row })
+    } else if (!seenBatches.has(bid)) {
+      seenBatches.add(bid)
+      const batchRows = rows.filter(r => r.planting.batchId === bid)
+      if (batchRows.length <= 1) {
+        entries.push({ type: 'single', row: batchRows[0] ?? row })
+      } else {
+        const varietySet = new Set(batchRows.map(r => r.planting.variety ?? ''))
+        const variety = varietySet.size === 1 ? (batchRows[0].planting.variety ?? null) : null
+        entries.push({ type: 'batch', batchId: bid, plant: row.plant, variety, rows: batchRows })
+      }
+    }
+  }
+
+  function toggleBatch(batchId: string) {
+    setExpandedBatches(prev => {
+      const next = new Set(prev)
+      if (next.has(batchId)) next.delete(batchId)
+      else next.add(batchId)
+      return next
+    })
+  }
+
   const totalDays = 365
   const totalWidth = totalDays * DAY_PX
 
-  // Scroll to today on mount
   useEffect(() => {
     if (!scrollRef.current) return
     const today = new Date()
@@ -134,23 +166,77 @@ export function CalendarView() {
             <div className="h-8 border-b border-gray-200 flex items-center px-3">
               <span className="text-xs font-medium text-gray-500">Bed / Square</span>
             </div>
-            <div className="overflow-hidden" style={{ height: `calc(100% - 32px)` }}>
-              {rows.map((r) => (
-                <div key={r.planting.id}
-                  className="flex items-center gap-2 px-3 border-b border-gray-50"
-                  style={{ height: ROW_H }}>
-                  <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: r.plant.color }} />
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-gray-700 truncate">{r.plant.name}</div>
-                    <div className="text-xs text-gray-400 truncate">{r.bed.name} ({r.square.col + 1},{r.square.row + 1})</div>
+            <div ref={labelScrollRef} className="overflow-hidden" style={{ height: `calc(100% - 32px)` }}>
+              {entries.map(entry => {
+                if (entry.type === 'single') {
+                  return (
+                    <div key={entry.row.planting.id}
+                      className="flex items-center gap-2 px-3 border-b border-gray-50"
+                      style={{ height: ROW_H }}>
+                      <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.row.plant.color }} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-gray-700 truncate">{entry.row.plant.name}</div>
+                        <div className="text-xs text-gray-400 truncate">{entry.row.bed.name} ({entry.row.square.col + 1},{entry.row.square.row + 1})</div>
+                      </div>
+                    </div>
+                  )
+                }
+
+                const expanded = expandedBatches.has(entry.batchId)
+                const label = entry.variety
+                  ? `${entry.plant.name} (${entry.variety})`
+                  : entry.plant.name
+                const uniqueBeds = [...new Set(entry.rows.map(r => r.bed.name))]
+                const bedLabel = uniqueBeds.length === 1 ? uniqueBeds[0] : `${uniqueBeds.length} beds`
+
+                return (
+                  <div key={entry.batchId}>
+                    <button
+                      onClick={() => toggleBatch(entry.batchId)}
+                      className="w-full flex items-center gap-2 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                      style={{ height: ROW_H, paddingLeft: 8, paddingRight: 12, borderLeft: `3px solid ${entry.plant.color}` }}
+                    >
+                      <ChevronRight
+                        size={12}
+                        className="shrink-0 text-gray-400 transition-transform duration-150"
+                        style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                      />
+                      <div className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.plant.color }} />
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-semibold text-gray-700 truncate">{label}</span>
+                          <span className="text-xs font-medium shrink-0 px-1 rounded"
+                            style={{ backgroundColor: `${entry.plant.color}22`, color: entry.plant.color }}>
+                            ×{entry.rows.length}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-400 truncate">{bedLabel}</div>
+                      </div>
+                    </button>
+                    {expanded && entry.rows.map(r => (
+                      <div key={r.planting.id}
+                        className="flex items-center gap-2 border-b border-gray-50"
+                        style={{ height: ROW_H, paddingLeft: 28, paddingRight: 12 }}>
+                        <div className="w-2.5 h-2.5 rounded-sm shrink-0 opacity-75" style={{ backgroundColor: r.plant.color }} />
+                        <div className="min-w-0">
+                          <div className="text-xs text-gray-600 truncate">{r.bed.name} ({r.square.col + 1},{r.square.row + 1})</div>
+                          {r.planting.variety && (
+                            <div className="text-xs text-gray-400 truncate">{r.planting.variety}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
           {/* Scrollable Gantt area */}
-          <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto scrollbar-thin">
+          <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto scrollbar-thin"
+            onScroll={(e) => {
+              if (labelScrollRef.current) labelScrollRef.current.scrollTop = e.currentTarget.scrollTop
+            }}>
             <div style={{ width: totalWidth, minHeight: '100%', position: 'relative' }}>
               {/* Month header */}
               <div className="sticky top-0 z-10 bg-white border-b border-gray-200" style={{ height: 32 }}>
@@ -161,7 +247,6 @@ export function CalendarView() {
                       {m.label}
                     </span>
                   ))}
-                  {/* Month grid lines */}
                   {months.map((m) => (
                     <div key={`line-${m.label}`} className="absolute top-0 bottom-0 border-l border-gray-100"
                       style={{ left: m.offset * DAY_PX }} />
@@ -171,16 +256,45 @@ export function CalendarView() {
 
               {/* Rows */}
               <div style={{ position: 'relative' }}>
-                {rows.map((r) => (
-                  <PlantingGanttRow
-                    key={r.planting.id}
-                    data={r}
-                    year={calendarYear}
-                    isSelected={selectedPlantingId === r.planting.id}
-                    totalWidth={totalWidth}
-                    onClick={() => setSelectedPlantingId(r.planting.id)}
-                  />
-                ))}
+                {entries.map(entry => {
+                  if (entry.type === 'single') {
+                    return (
+                      <PlantingGanttRow
+                        key={entry.row.planting.id}
+                        data={entry.row}
+                        year={calendarYear}
+                        isSelected={selectedPlantingId === entry.row.planting.id}
+                        totalWidth={totalWidth}
+                        onClick={() => setSelectedPlantingId(entry.row.planting.id)}
+                      />
+                    )
+                  }
+
+                  const expanded = expandedBatches.has(entry.batchId)
+                  return (
+                    <div key={entry.batchId}>
+                      <BatchGanttRow
+                        entry={entry}
+                        year={calendarYear}
+                        totalWidth={totalWidth}
+                        isAnySelected={entry.rows.some(r => r.planting.id === selectedPlantingId)}
+                        expanded={expanded}
+                        onToggle={() => toggleBatch(entry.batchId)}
+                      />
+                      {expanded && entry.rows.map(r => (
+                        <PlantingGanttRow
+                          key={r.planting.id}
+                          data={r}
+                          year={calendarYear}
+                          isSelected={selectedPlantingId === r.planting.id}
+                          totalWidth={totalWidth}
+                          onClick={() => setSelectedPlantingId(r.planting.id)}
+                          indent
+                        />
+                      ))}
+                    </div>
+                  )
+                })}
 
                 {/* Frost lines */}
                 {lastFrostOffset !== null && lastFrostOffset >= 0 && lastFrostOffset < 365 && (
@@ -215,12 +329,13 @@ export function CalendarView() {
   )
 }
 
-function PlantingGanttRow({ data, year, isSelected, totalWidth, onClick }: {
+function PlantingGanttRow({ data, year, isSelected, totalWidth, onClick, indent = false }: {
   data: PlantingRowData
   year: number
   isSelected: boolean
   totalWidth: number
   onClick: () => void
+  indent?: boolean
 }) {
   const { planting, plant } = data
   const yearStart = startOfYear(new Date(year, 0, 1))
@@ -236,16 +351,16 @@ function PlantingGanttRow({ data, year, isSelected, totalWidth, onClick }: {
   const sowOffset = toOffset(planting.transplantOrSowDate)
   const harvestOffset = toOffset(planting.actualHarvestDate ?? planting.expectedHarvestDate)
   const harvestEndOffset = harvestOffset !== null ? Math.min(harvestOffset + 14 * DAY_PX, totalWidth) : null
-
   const hasAnyBar = seedOffset !== null || sowOffset !== null
 
   return (
     <div
-      className={`relative border-b border-gray-50 cursor-pointer transition-colors ${isSelected ? 'bg-green-50' : 'hover:bg-gray-50'}`}
+      className={`relative border-b cursor-pointer transition-colors ${
+        isSelected ? 'bg-green-50 border-gray-100' : indent ? 'bg-gray-50 border-gray-50 hover:bg-gray-100' : 'border-gray-50 hover:bg-gray-50'
+      }`}
       style={{ height: ROW_H }}
       onClick={onClick}
     >
-      {/* Month lines */}
       {[0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334].map((d) => (
         <div key={d} className="absolute top-0 bottom-0 border-l border-gray-100 pointer-events-none"
           style={{ left: d * DAY_PX }} />
@@ -257,40 +372,86 @@ function PlantingGanttRow({ data, year, isSelected, totalWidth, onClick }: {
         </div>
       )}
 
-      {/* Seed start → transplant bar (indigo) */}
       {seedOffset !== null && sowOffset !== null && sowOffset > seedOffset && (
         <div className="absolute top-1/2 -translate-y-1/2 h-5 rounded-l-full opacity-80"
-          style={{
-            left: seedOffset,
-            width: sowOffset - seedOffset,
-            backgroundColor: '#818cf8',
-          }} />
+          style={{ left: seedOffset, width: sowOffset - seedOffset, backgroundColor: '#818cf8' }} />
       )}
 
-      {/* Transplant → harvest bar (plant color) */}
       {sowOffset !== null && harvestOffset !== null && harvestOffset > sowOffset && (
         <div className="absolute top-1/2 -translate-y-1/2 h-5 opacity-80"
-          style={{
-            left: sowOffset,
-            width: harvestOffset - sowOffset,
-            backgroundColor: plant.color,
-          }} />
+          style={{ left: sowOffset, width: harvestOffset - sowOffset, backgroundColor: plant.color }} />
       )}
 
-      {/* Harvest window (gold) */}
       {harvestOffset !== null && harvestEndOffset !== null && (
         <div className="absolute top-1/2 -translate-y-1/2 h-5 rounded-r-full opacity-80"
-          style={{
-            left: harvestOffset,
-            width: harvestEndOffset - harvestOffset,
-            backgroundColor: '#fbbf24',
-          }} />
+          style={{ left: harvestOffset, width: harvestEndOffset - harvestOffset, backgroundColor: '#fbbf24' }} />
       )}
 
-      {/* Simple dot for planned-only entries with no dates */}
       {!hasAnyBar && (
         <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2"
           style={{ left: 10, borderColor: plant.color, backgroundColor: 'white' }} />
+      )}
+    </div>
+  )
+}
+
+function BatchGanttRow({ entry, year, totalWidth, isAnySelected, expanded, onToggle }: {
+  entry: Extract<CalendarEntry, { type: 'batch' }>
+  year: number
+  totalWidth: number
+  isAnySelected: boolean
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const { plant, rows } = entry
+  const yearStart = startOfYear(new Date(year, 0, 1))
+
+  function toOffset(dateStr: string | null): number | null {
+    if (!dateStr) return null
+    const d = parseISO(dateStr)
+    if (!isValid(d)) return null
+    return clamp(differenceInDays(d, yearStart) * DAY_PX, 0, totalWidth)
+  }
+
+  const seedOffsets = rows.map(r => toOffset(r.planting.seedStartDate)).filter((v): v is number => v !== null)
+  const sowOffsets = rows.map(r => toOffset(r.planting.transplantOrSowDate)).filter((v): v is number => v !== null)
+  const harvestOffsets = rows.map(r => toOffset(r.planting.actualHarvestDate ?? r.planting.expectedHarvestDate)).filter((v): v is number => v !== null)
+
+  const minSeed = seedOffsets.length ? Math.min(...seedOffsets) : null
+  const minSow = sowOffsets.length ? Math.min(...sowOffsets) : null
+  const maxHarvest = harvestOffsets.length ? Math.max(...harvestOffsets) : null
+  const maxHarvestEnd = maxHarvest !== null ? Math.min(maxHarvest + 14 * DAY_PX, totalWidth) : null
+  const hasAnyBar = minSeed !== null || minSow !== null
+
+  return (
+    <div
+      className={`relative border-b border-gray-100 cursor-pointer transition-colors ${isAnySelected ? 'bg-green-50' : 'hover:bg-gray-50'}`}
+      style={{ height: ROW_H, borderLeft: `3px solid ${plant.color}` }}
+      onClick={onToggle}
+    >
+      {[0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334].map((d) => (
+        <div key={d} className="absolute top-0 bottom-0 border-l border-gray-100 pointer-events-none"
+          style={{ left: d * DAY_PX }} />
+      ))}
+
+      {!hasAnyBar && (
+        <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2"
+          style={{ left: 10, borderColor: plant.color, backgroundColor: 'white' }} />
+      )}
+
+      {minSeed !== null && minSow !== null && minSow > minSeed && (
+        <div className="absolute top-1/2 -translate-y-1/2 h-5 rounded-l-full opacity-80"
+          style={{ left: minSeed, width: minSow - minSeed, backgroundColor: '#818cf8' }} />
+      )}
+
+      {minSow !== null && maxHarvest !== null && maxHarvest > minSow && (
+        <div className="absolute top-1/2 -translate-y-1/2 h-5 opacity-80"
+          style={{ left: minSow, width: maxHarvest - minSow, backgroundColor: plant.color }} />
+      )}
+
+      {maxHarvest !== null && maxHarvestEnd !== null && (
+        <div className="absolute top-1/2 -translate-y-1/2 h-5 rounded-r-full opacity-80"
+          style={{ left: maxHarvest, width: maxHarvestEnd - maxHarvest, backgroundColor: '#fbbf24' }} />
       )}
     </div>
   )
