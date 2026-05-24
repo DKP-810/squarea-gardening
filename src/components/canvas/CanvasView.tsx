@@ -51,7 +51,7 @@ export function CanvasView() {
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [activeGardenId])
 
   function showOverlapToast() {
     setOverlapToast(true)
