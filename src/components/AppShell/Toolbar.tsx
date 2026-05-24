@@ -19,7 +19,7 @@ const LABELS: Record<CanvasTool, string> = {
 }
 
 interface Props {
-  bedButtonRef?: React.RefObject<HTMLButtonElement>
+  bedButtonRef?: React.RefObject<HTMLButtonElement | null>
   highlightBed?: boolean
 }
 
