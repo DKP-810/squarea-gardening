@@ -35,14 +35,20 @@ export function AppShell() {
     [activeGardenId]
   ) ?? 0
 
+  const showTip = !dismissed && bedCount === 0 && view === 'canvas' && !!activeGardenId
+
+  // Track whether the tip was actually visible this session before permanently dismissing
+  const tipWasShowing = useRef(false)
   useEffect(() => {
-    if (bedCount > 0 && !dismissed) {
+    if (showTip) tipWasShowing.current = true
+  }, [showTip])
+
+  useEffect(() => {
+    if (bedCount > 0 && !dismissed && tipWasShowing.current) {
       localStorage.setItem('hasEverCreatedBed', 'true')
       setDismissed(true)
     }
   }, [bedCount, dismissed])
-
-  const showTip = !dismissed && bedCount === 0 && view === 'canvas' && !!activeGardenId
 
   useEffect(() => {
     if (!showTip) { setTipPos(null); return }
