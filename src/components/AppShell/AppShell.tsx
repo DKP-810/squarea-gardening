@@ -115,13 +115,15 @@ export function AppShell() {
       {/* Onboarding tooltip — points at the Bed button, disappears after first bed is drawn */}
       {showTip && tipPos && (
         <div
-          className="fixed z-40 pointer-events-none animate-bounce"
+          className="fixed z-40 pointer-events-none"
           style={{ top: tipPos.top, left: tipPos.left, transform: 'translateX(-50%)' }}
         >
-          <div className="relative">
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-green-600 rotate-45 rounded-sm" />
-            <div className="bg-green-600 text-white text-xs font-medium rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
-              Draw your first bed to get started!
+          <div className="animate-bounce">
+            <div className="relative">
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-green-600 rotate-45 rounded-sm" />
+              <div className="bg-green-600 text-white text-xs font-medium rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                Draw your first bed to get started!
+              </div>
             </div>
           </div>
         </div>
