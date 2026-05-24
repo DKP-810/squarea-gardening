@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { Map, Calendar, Leaf, Settings, Download } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import clsx from 'clsx'
+import { db } from '../../db/db'
 import { useAppStore } from '../../store'
 import { useActiveGarden } from '../../hooks/useGarden'
 import { Toolbar } from './Toolbar'
@@ -12,14 +14,48 @@ import { ExportImportModal } from '../modals/ExportImportModal'
 import type { AppView } from '../../types'
 
 const VIEWS: { id: AppView; icon: React.ReactNode; label: string }[] = [
-  { id: 'canvas', icon: <Map size={15} />, label: 'Garden' },
+  { id: 'canvas',   icon: <Map size={15} />,      label: 'Garden' },
   { id: 'calendar', icon: <Calendar size={15} />, label: 'Calendar' },
-  { id: 'plants', icon: <Leaf size={15} />, label: 'Plants' },
+  { id: 'plants',   icon: <Leaf size={15} />,     label: 'Plants' },
 ]
 
 export function AppShell() {
-  const { view, setView, gardenModalOpen, setGardenModalOpen, exportModalOpen, setExportModalOpen } = useAppStore()
+  const { view, setView, gardenModalOpen, setGardenModalOpen, exportModalOpen, setExportModalOpen, activeGardenId } = useAppStore()
   const garden = useActiveGarden()
+
+  // Onboarding tip
+  const bedButtonRef = useRef<HTMLButtonElement>(null)
+  const [tipPos, setTipPos] = useState<{ top: number; left: number } | null>(null)
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem('hasEverCreatedBed') === 'true'
+  )
+
+  const bedCount = useLiveQuery(
+    () => activeGardenId ? db.beds.where('gardenId').equals(activeGardenId).count() : 0,
+    [activeGardenId]
+  ) ?? 0
+
+  useEffect(() => {
+    if (bedCount > 0 && !dismissed) {
+      localStorage.setItem('hasEverCreatedBed', 'true')
+      setDismissed(true)
+    }
+  }, [bedCount, dismissed])
+
+  const showTip = !dismissed && bedCount === 0 && view === 'canvas' && !!activeGardenId
+
+  useEffect(() => {
+    if (!showTip) { setTipPos(null); return }
+    function measure() {
+      const el = bedButtonRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      setTipPos({ top: rect.bottom + 8, left: rect.left + rect.width / 2 })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [showTip])
 
   return (
     <div className="flex flex-col h-full">
@@ -30,7 +66,7 @@ export function AppShell() {
           <span className="font-bold text-gray-800 text-sm hidden sm:inline">Squarea</span>
         </div>
 
-        <Toolbar />
+        <Toolbar bedButtonRef={bedButtonRef} highlightBed={showTip} />
 
         {/* View tabs */}
         <nav className="flex items-center gap-1">
@@ -71,10 +107,25 @@ export function AppShell() {
 
       {/* Main content */}
       <main className="flex flex-1 overflow-hidden">
-        {view === 'canvas' && <CanvasView />}
+        {view === 'canvas'   && <CanvasView />}
         {view === 'calendar' && <CalendarView />}
-        {view === 'plants' && <PlantsView />}
+        {view === 'plants'   && <PlantsView />}
       </main>
+
+      {/* Onboarding tooltip — points at the Bed button, disappears after first bed is drawn */}
+      {showTip && tipPos && (
+        <div
+          className="fixed z-40 pointer-events-none animate-bounce"
+          style={{ top: tipPos.top, left: tipPos.left, transform: 'translateX(-50%)' }}
+        >
+          <div className="relative">
+            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-green-600 rotate-45 rounded-sm" />
+            <div className="bg-green-600 text-white text-xs font-medium rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+              Draw your first bed to get started!
+            </div>
+          </div>
+        </div>
+      )}
 
       {gardenModalOpen && <GardenSettingsModal onClose={() => setGardenModalOpen(false)} />}
       {exportModalOpen && <ExportImportModal onClose={() => setExportModalOpen(false)} />}
