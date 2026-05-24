@@ -395,7 +395,7 @@ function PlantingGanttRow({ data, year, isSelected, totalWidth, onClick, indent 
   )
 }
 
-function BatchGanttRow({ entry, year, totalWidth, isAnySelected, expanded, onToggle }: {
+function BatchGanttRow({ entry, year, totalWidth, isAnySelected, onToggle }: {
   entry: Extract<CalendarEntry, { type: 'batch' }>
   year: number
   totalWidth: number
