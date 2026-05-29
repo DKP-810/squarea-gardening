@@ -83,7 +83,35 @@ Cucumber (Vining) corrected to `spacingDensity: 2` (was 1).
   - Expanded: indented sub-rows per individual planting, each with its own Gantt bar
 - Batches of size 1 render as regular singles (no batch UI chrome).
 
-## What's not done yet (as of 2026-05-24)
+## Deployment
+- Live on Netlify (auto-deploys on every push to `master`)
+- `.gitignore` excludes `dist/` — Netlify builds from source on their servers
+- Netlify free tier: 300 build minutes/month — batch pushes to conserve
+
+## Bed undo/redo
+- `src/store/bedHistory.ts`: module-level undo/redo stacks (not in Zustand — no need to be reactive)
+- Captures: `add-bed`, `delete-bed` (with full squares + plantings snapshot), `edit-bed` (before/after property save)
+- Keyboard: Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) in `GardenStage` keyboard handler
+- Undo of delete-bed restores bed + all squares + plantings and re-selects the bed
+- Max 20 entries
+
+## ZIP frost date lookup
+- `src/data/frostDates.ts`: ~90 range entries covering all US ZIP codes, keyed by 3-digit prefix
+- `lookupFrostDates(zip)` returns `{ lastFrost, firstFrost }` as `YYYY-MM-DD` for current year, or null (frost-free / no data)
+- Wired into `GardenSettingsModal`: auto-fills dates if fields are empty; shows "Apply" banner if dates already set
+- Data is NOAA 32°F / 50% probability approximations — users are advised to verify locally
+
+## Onboarding tooltip
+- `AppShell` queries bed count via `useLiveQuery`
+- Shows a bouncing green tooltip pointing at the Bed button when: garden exists + 0 beds + canvas view + not dismissed
+- Dismissed permanently via `localStorage` key `hasEverCreatedBed` — only set when tooltip was actually visible and user drew their first bed
+- Bed button gets a green ring highlight while tip is showing
+- `bedButtonRef` passed from AppShell → Toolbar, positioned via `getBoundingClientRect()`
+
+## Canvas sizing fix
+- `CanvasView` ResizeObserver effect now depends on `[activeGardenId]` so it re-runs after garden creation (previously fired once on mount when `containerRef` was null)
+
+## What's not done yet (as of 2026-05-25)
 - Batch features: batch delete/move, plant-type change on a batch member with "change all or split" option
 - PWA hardening / Lighthouse audit (intentionally deferred)
 - Unit tests
